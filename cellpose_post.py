@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from skimage.measure import regionprops
 import json
 import os
+import pandas as pd 
 
 """
 TODO
@@ -43,7 +44,6 @@ if __name__ == '__main__':
     # Load bbox coords
     f = open('/home/yec23006/projects/research/CellDetection/JsonOutput/e2d4.json')
     bboxes = json.load(f)
-    print("# of bboxes : ", len(bboxes))
 
     # Load image
     image_path = '/home/yec23006/projects/research/CellDetection/MerfishData/DAPI.tif'
@@ -56,9 +56,9 @@ if __name__ == '__main__':
     area_list = [] ###########################################
 
     bbox_plot = cv2.cvtColor(dapi.copy(), cv2.COLOR_GRAY2BGR)
-
-    for idx in range(len(bboxes)):
-        print(f"Processing bbox {idx}")
+    cell_idx_list = []
+    
+    for idx in tqdm(range(len(bboxes))):
         bbox = dapi[bboxes[idx]['min_row']:bboxes[idx]['max_row'], bboxes[idx]['min_col']:bboxes[idx]['max_col']]
         bin_bbox = np.where(bbox > np.mean(bbox), 255, 0)
 
@@ -94,10 +94,12 @@ if __name__ == '__main__':
                     cellcnt += 1
                     centroid = (centroid[0] + np.array([bboxes[idx]['min_col'], bboxes[idx]['min_row']])).astype(np.int32)  
                     mask1 = np.where(ori_mask==1, 1, 0)
-                    centroid_list.append(centroid) ###########Think about this case##################
+                    centroid_list.append(centroid)
+                    area_list.append(ori_stats[1][-1])
                     break
 
                 elif totalLabels == 3:
+                    # Two cells overlapped -> get a straight tangent line to get two objects
                     cellcnt += 2
                     centroid1 = (centroid[1] + np.array([bboxes[idx]['min_col'], bboxes[idx]['min_row']])).astype(np.int32)  
                     centroid2 = (centroid[2] + np.array([bboxes[idx]['min_col'], bboxes[idx]['min_row']])).astype(np.int32)  
@@ -119,18 +121,31 @@ if __name__ == '__main__':
             centroid_list.append(centroid1)
             area_list.append(stats[1][-1])
 
-    output_path = 'postprocessing/output_image_with_dots_0715.jpeg' 
+    output_path = 'postprocessing/output_image_with_dots_0725.jpeg' 
     cv2.imwrite(output_path, bbox_plot)
 
     print('Total Cell count : ', cellcnt)
 
     # Save bounding box coordinates to a JSON file
     centroid_arr = np.array(centroid_list)
-    print('Coord saving...')
-    with open('postprocessing/coord_0715.npy', 'wb') as f:
-        np.save(f, centroid_arr)
+    area_arr = np.array(area_list)
+    print('Coord, Area saving...')
 
-    print(f'Saved centroids: {centroid_arr}')
+    with open('postprocessing/coord_0725.npy', 'wb') as f:
+        np.save(f, centroid_arr)
+    with open('postprocessing/area_0725.npy', 'wb') as f:
+        np.save(f, area_arr)
+
+    data = []
+    df = pd.DataFrame(data, columns=['Cell id', 'Centroid', 'Area'])
+    id_list = ['Cell ' + str(i + 1) for i in range(len(centroid_list))]
+
+    df['Cell id'] = id_list
+    df['Centroid'] = centroid_list
+    df['DAPI'] = area_list
+    df.to_csv('postprocessing/gene_expression.csv', sep='\t')
+
+    print('Gene expression csv saved')
 
     # Display the output image with dots
     plt.figure(figsize=(10, 10))
