@@ -53,8 +53,8 @@ if __name__ == '__main__':
 
     cellcnt = 0
     centroid_list = []
-    area_list = [] ###########################################
-
+    area_list = []
+    bbox_list = []
     bbox_plot = cv2.cvtColor(dapi.copy(), cv2.COLOR_GRAY2BGR)
     cell_idx_list = []
     
@@ -88,6 +88,7 @@ if __name__ == '__main__':
                     centroid_list.append(centroid.astype(np.int32)) 
                     mask1 = np.where(ori_mask==1, 1, 0)
                     area_list.append(ori_stats[1][-1])
+                    bbox_list.append([bboxes[idx]['min_row'], bboxes[idx]['min_col'], bboxes[idx]['max_row'], bboxes[idx]['max_col']])
                     break
 
                 elif totalLabels == 1 and i >= 4:
@@ -96,6 +97,7 @@ if __name__ == '__main__':
                     mask1 = np.where(ori_mask==1, 1, 0)
                     centroid_list.append(centroid)
                     area_list.append(ori_stats[1][-1])
+                    bbox_list.append([bboxes[idx]['min_row'], bboxes[idx]['min_col'], bboxes[idx]['max_row'], bboxes[idx]['max_col']])
                     break
 
                 elif totalLabels == 3:
@@ -111,7 +113,11 @@ if __name__ == '__main__':
                     centroid_list.append(centroid1)
                     centroid_list.append(centroid2)
                     area_list.append(stats[1][-1])
+                    mid = [int((centroid1[0] + centroid2[0])/2), int((centroid1[1] + centroid2[1])/2)]
+                    bbox_list.append([bboxes[idx]['min_row'], bboxes[idx]['min_col'], bboxes[idx]['min_row'] + mid[0], bboxes[idx]['max_col']])
                     area_list.append(stats[2][-1])
+                    bbox_list.append([bboxes[idx]['min_row'] + mid[0], bboxes[idx]['min_col'], bboxes[idx]['max_row'], bboxes[idx]['max_col']])
+                    
                     break
                 
         else: # if the obj is a circle
@@ -119,6 +125,7 @@ if __name__ == '__main__':
             cv2.circle(bbox_plot, tuple(centroid1), radius=1, color=(0, 0, 255), thickness=-1)
             cellcnt += 1
             centroid_list.append(centroid1)
+            bbox_list.append([bboxes[idx]['min_row'], bboxes[idx]['min_col'], bboxes[idx]['max_row'], bboxes[idx]['max_col']])
             area_list.append(stats[1][-1])
 
     output_path = 'postprocessing/output_image_with_dots_0725.jpeg' 
@@ -129,20 +136,25 @@ if __name__ == '__main__':
     # Save bounding box coordinates to a JSON file
     centroid_arr = np.array(centroid_list)
     area_arr = np.array(area_list)
-    print('Coord, Area saving...')
+    bbox_arr = np.array(bbox_list)
 
-    with open('postprocessing/coord_0725.npy', 'wb') as f:
+    print('Saving...')
+    with open('postprocessing/centroid_0725.npy', 'wb') as f:
         np.save(f, centroid_arr)
-    with open('postprocessing/area_0725.npy', 'wb') as f:
+    with open('postprocessing/dapi_0725.npy', 'wb') as f:
         np.save(f, area_arr)
+    with open('postprocessing/bbox_0725.npy', 'wb') as f:
+        np.save(f, bbox_arr)
 
     data = []
-    df = pd.DataFrame(data, columns=['Cell id', 'Centroid', 'Area'])
+    df = pd.DataFrame(data, columns=['Cell id', 'Centroid', 'DAPI', 'Bbox'])
     id_list = ['Cell ' + str(i + 1) for i in range(len(centroid_list))]
 
     df['Cell id'] = id_list
     df['Centroid'] = centroid_list
+    df['Bbox'] = bbox_list
     df['DAPI'] = area_list
+    
     df.to_csv('postprocessing/gene_expression.csv', sep='\t')
 
     print('Gene expression csv saved')
